@@ -30,10 +30,10 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   UserModel? userModel;
 
-  void getData(WidgetRef ref, User data) async {
+  void getData(WidgetRef ref, User authChange) async {
     userModel = await ref
         .watch(authControllerProvider.notifier)
-        .getUserData(data.uid)
+        .getUserData(authChange.uid)
         .first;
     ref.read(userProvider.notifier).update((state) => userModel);
   }
@@ -42,7 +42,7 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final authChanges = ref.watch(authStateChangeProvider);
     return authChanges.when(
-      data: (data) {
+      data: (authChange) {
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: 'Reddit Tutorial',
@@ -50,8 +50,8 @@ class _MyAppState extends ConsumerState<MyApp> {
               Pallete.darkModeAppTheme, //theme doesnt work without a scaffold
           routerDelegate: RoutemasterDelegate(
             routesBuilder: (context) {
-              if (data != null) {
-                getData(ref, data);
+              if (authChange != null) {
+                getData(ref, authChange);
                 if (userModel != null) {
                   return loggedInRoute;
                 }
