@@ -20,7 +20,7 @@ class CommunityRepository {
     try {
       var communityDoc = await _communities.doc(community.name).get();
       if (communityDoc.exists) {
-        throw "Community with the same name already exists"; 
+        throw "Community with the same name already exists";  
       }
       return right(_communities.doc(community.name).set(community.toMap()));
     } on FirebaseException catch (e) {
