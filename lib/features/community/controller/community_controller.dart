@@ -2,12 +2,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:reddit_app/core/constants/constants.dart';
+import 'package:reddit_app/core/failure.dart';
 import 'package:reddit_app/core/providers/storage_repository_provider.dart';
 import 'package:reddit_app/core/utils.dart';
 import 'package:reddit_app/features/auth/controller/auth_controller.dart';
 import 'package:reddit_app/features/community/repository/community_repository.dart';
 import 'package:reddit_app/models/community_model.dart';
+import 'package:reddit_app/models/post_model.dart';
 import 'package:routemaster/routemaster.dart';
 
 final communityControllerProvider =
@@ -26,6 +29,15 @@ final userCommunitiesProvider = StreamProvider((ref) {
 final getCommunityByNameProvider = StreamProvider.family((ref, String name) {
   final communityController = ref.watch(communityControllerProvider.notifier);
   return communityController.getCommunityByName(name);
+});
+
+final searchCommunityProvider = StreamProvider.family((ref, String query) {
+  final communityController = ref.watch(communityControllerProvider.notifier);
+  return communityController.searchCommunity(query);
+});
+
+final getCommunityPostsProvider = StreamProvider.family((ref, String name) {
+  return ref.read(communityControllerProvider.notifier).getCommunityPosts(name);
 });
 
 class CommunityController extends StateNotifier<bool> {
@@ -60,6 +72,24 @@ class CommunityController extends StateNotifier<bool> {
     });
   }
 
+  void joinCommunity(Community community, BuildContext context) async {
+    final uid = _ref.read(userProvider)!.uid;
+
+    Either<Failure, void> res;
+    if (community.members.contains(uid)) {
+      res = await _communityRepository.leaveCommunity(community.name, uid);
+    } else {
+      res = await _communityRepository.joinCommunity(community.name, uid);
+    }
+    res.fold((l) => showSnackBar(context, l.message), (r) {
+      if (community.members.contains(uid)) {
+        showSnackBar(context, "Community left successfully");
+      } else {
+        showSnackBar(context, "Community joined successfully");
+      }
+    });
+  }
+
   Stream<List<Community>> getUserCommunities() {
     final uid = _ref.read(userProvider)!.uid;
     return _communityRepository.getUserCommunities(uid);
@@ -73,7 +103,9 @@ class CommunityController extends StateNotifier<bool> {
       {required File? profileFile,
       required File? bannerFile,
       required BuildContext context,
+      //communityModel we have right now
       required Community community}) async {
+    state = true;
     if (profileFile != null) {
       //communities/profile/memes (image saved in the path in the left)
       final res = await _storageRepository.storeFile(
@@ -82,16 +114,32 @@ class CommunityController extends StateNotifier<bool> {
           (r) => community = community.copyWith(avatar: r));
     }
 
-    if (profileFile != null) {
-      //communities/banners/memes (image saved in the path in the left)
+    if (bannerFile != null) {
+      //communities/banner/memes (image saved in the path in the left)
       final res = await _storageRepository.storeFile(
           path: "communities/banner", id: community.name, file: bannerFile);
       res.fold((l) => showSnackBar(context, l.message),
-          (r) => community = community.copyWith(avatar: r));
+          (r) => community = community.copyWith(banner: r));
     }
     final res = await _communityRepository.editCommunity(community);
-
+    state = false;
     res.fold((l) => showSnackBar(context, l.message),
         (r) => Routemaster.of(context).pop());
   }
+
+  Stream<List<Community>> searchCommunity(String query) {
+    return _communityRepository.searchCommunity(query);
+  }
+
+  void addMods(
+      String communityName, List<String> mods, BuildContext context) async {
+    final res = await _communityRepository.addMods(communityName, mods);
+    res.fold((l) => showSnackBar(context, l.message),
+        (r) => Routemaster.of(context).pop());
+  }
+
+  Stream<List<Post>> getCommunityPosts(String name) {
+    return _communityRepository.getCommunityPosts(name);
+  }
+
 }

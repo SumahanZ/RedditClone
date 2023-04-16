@@ -6,6 +6,7 @@ import 'package:reddit_app/core/failure.dart';
 import 'package:reddit_app/core/providers/firebase_providers.dart';
 import 'package:reddit_app/core/type_defs.dart';
 import 'package:reddit_app/models/community_model.dart';
+import 'package:reddit_app/models/post_model.dart';
 
 final communityRepositoryProvider = Provider((ref) {
   return CommunityRepository(firestore: ref.watch(firestoreProvider));
@@ -14,6 +15,9 @@ final communityRepositoryProvider = Provider((ref) {
 class CommunityRepository {
   final FirebaseFirestore _firestore;
 
+  CollectionReference get _posts =>
+      _firestore.collection(FirebaseConstants.postsCollection);
+      
   CommunityRepository({required FirebaseFirestore firestore}) : _firestore = firestore;
   
   FutureVoid createCommunity(Community community) async {
@@ -52,6 +56,65 @@ class CommunityRepository {
     } catch (e) {
       return left(Failure(e.toString()));
     }
+  }
+
+  FutureVoid joinCommunity(String communityName, String uid) async {
+    try {
+      return right(_communities.doc(communityName).update({
+        "members": FieldValue.arrayUnion([uid]),
+      }));
+    } on FirebaseException catch (e) {
+      throw e.message!;
+    } catch (e) {
+      return left(Failure(e.toString()));
+    }
+  }
+
+  FutureVoid leaveCommunity(String communityName, String uid) async {
+    try {
+      return right(_communities.doc(communityName).update({
+        "members": FieldValue.arrayRemove([uid]),
+      }));
+    } on FirebaseException catch (e) {
+      throw e.message!;
+    } catch (e) {
+      return left(Failure(e.toString()));
+    }
+  }
+
+  //if query is empty it will show all results, which we dont want
+  Stream<List<Community>> searchCommunity(String query) {
+    return _communities.where("name", isGreaterThanOrEqualTo: query.isEmpty ? 0 : query, isLessThan: query.isEmpty ? null : 
+    //query substring to get the initial word: "flu" string from charcode to get communities that start with "flu"
+    query.substring(0, query.length-1) + String.fromCharCode(query.codeUnitAt(query.length -1) + 1)).snapshots().map((event) {
+      List<Community> communities = [];
+      for(var doc in event.docs) {
+        communities.add(Community.fromMap(doc.data() as Map<String, dynamic>));
+      }
+      return communities;
+    });
+  }
+
+  FutureVoid addMods(String communityName, List<String> mods) async {
+    try {
+     return right( _communities.doc(communityName).update({
+      "mods": mods,
+     }));
+    } on FirebaseException catch (e) {
+      throw e.message!;
+    } catch (e) {
+      return left(Failure(e.toString()));
+    }
+  }
+
+  Stream<List<Post>> getCommunityPosts(String name) {
+    return _posts
+        .where("communityName", isEqualTo: name)
+        .orderBy("createdAt", descending: true)
+        .snapshots()
+        .map((event) => event.docs
+            .map((e) => Post.fromMap(e.data() as Map<String, dynamic>))
+            .toList());
   }
 
   CollectionReference get _communities =>
